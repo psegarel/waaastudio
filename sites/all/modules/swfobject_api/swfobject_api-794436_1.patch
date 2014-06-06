@@ -1,0 +1,192 @@
+diff --git a/README.txt b/README.txt
+index 8b96b16..b09e56e 100644
+--- a/README.txt
++++ b/README.txt
+@@ -7,15 +7,24 @@ Description
+ This module makes it easier to add flash content to sites
+ 
+ 
++Dependencies
++-------------------------------------
++* Libraries API:
++    http://drupal.org/project/libraries
++
++* SWFObject library 2:
++    http://code.google.com/p/swfobject/
++    Place the extracted swfobject folder into the libraries directory.
++
++
+ Installation
+ -------------------------------------
+- 1) Place module into modules directory
+- 2) Download SWFObject library 2 from:
+-      http://code.google.com/p/swfobject/
+- 3) Place the swfobject.js file into modules/swfobject_api/
+- 4) Place the expressinstall.swf file into modules/swfobject_api/
+- 5) Activate module in admin/build/modules
+- 6) Configure the module via admin/settings/swfobject_api
++* Install as usual, see http://drupal.org/node/70151 for further information.
++
++
++Configuration
++* Configure the module via admin/settings/swfobject_api.
++
+ 
+ Usage
+ ------------------------------------
+@@ -44,22 +53,17 @@ Example:
+ 
+ Advanced Usage
+ ------------------------------------
+- You can change the class and id of the div wrapping the flash file with:
+- $param['div_id']
+- $param['class']
+-
+- You can change the "No flash detected" message with
+- $param['no_flash'] = t('No flash for you');
+- 
+- You can also pass text and a drupal filter to the no_flash option:
+- $param['no_flash'] = array( 
+-   'text' => t('This is your text'),
+-   'filter' => 3, // drupal filter id
++  You can change the class and id of the div wrapping the flash file with:
++  $param['div_id']
++  $param['class']
++
++  You can change the "No flash detected" message with
++  $param['no_flash'] = t('No flash for you');
++
++  You can also pass text and a drupal filter to the no_flash option:
++  $param['no_flash'] = array( 
++    'text' => t('This is your text'),
++    'filter' => 3, // drupal filter id
+   );
+-  
++
+   You can pass php to this variable as well.
+-  
+- 
+- 
+- 
+- 
+diff --git a/swfobject_api.info b/swfobject_api.info
+index d4fedfe..6722e2b 100644
+--- a/swfobject_api.info
++++ b/swfobject_api.info
+@@ -1,4 +1,5 @@
+ ; $Id$
+ name = SWFObject API
+ description = Implements the SWFObject Library, makes it easy for developers to add flash content
+-core = 6.x
+\ No newline at end of file
++dependencies[] = libraries
++core = 6.x
+diff --git a/swfobject_api.install b/swfobject_api.install
+index f66db16..e2bf0b3 100644
+--- a/swfobject_api.install
++++ b/swfobject_api.install
+@@ -12,7 +12,6 @@
+ function swfobject_api_uninstall() {
+   variable_del('swfoa_settings_express');
+   variable_del('swfoa_settings_version');
+-  variable_del('swfoa_settings_path');
+ }
+ 
+ /**
+@@ -25,9 +24,8 @@ function swfobject_api_requirements($phase) {
+   $requirements = array();
+   $t = get_t();
+ 
+-  $path = variable_get('swfoa_settings_path', drupal_get_path('module', 'swfobject_api') .'/swfobject.js');
+-  if (! file_exists($path)) {
+-    $error_message = $t("Please download the swfobject package from !url and place the required files in the swfobject module directory. See README.txt for more info.",
++  if (!file_exists(libraries_get_path('swfobject'))) {
++    $error_message = $t('Please download the swfobject package from !url and place the extracted swfobject folder into the libraries directory. See README.txt for more info.',
+       array('!url' => l('http://code.google.com/p/swfobject/', 'http://code.google.com/p/swfobject/'))
+     );
+ 
+@@ -55,3 +53,41 @@ function swfobject_api_requirements($phase) {
+ 
+   return $requirements;
+ }
++
++/**
++ * Implements hook_update_N().
++ */
++function swfobject_api_update_6001() {
++  $return = array();
++
++  // If the Libraries API module is not installed and enabled.
++  if (!module_exists('libraries')) {
++    // If the Libraries API is not installed.
++    if (!drupal_get_path('module', 'libraries')) {
++      $return['#abort'] = array(
++        'success' => FALSE,
++        'query' => t('Please install the <a href="!url">Libraries API</a> module as the SWFObject API module now depends on it.',
++          array('!url' => 'http://drupal.org/project/libraries')),
++      );
++    }
++    else {
++      // Enable the Libraries API module.
++      require_once('includes/install.inc');
++      module_rebuild_cache();
++      drupal_install_modules(array('libraries'));
++    }
++  }
++  elseif (!file_exists(libraries_get_path('swfobject'))) {
++    $return['#abort'] = array(
++      'success' => FALSE,
++      'query' => t('Please download the swfobject package from !url and place the extracted swfobject folder into the libraries directory. See README.txt for more info.',
++        array('!url' => l('http://code.google.com/p/swfobject/', 'http://code.google.com/p/swfobject/'))),
++    );
++  }
++  else {
++    // Delete deprecated variable.
++    variable_del('swfoa_settings_path');
++  }
++
++  return $return;
++}
+diff --git a/swfobject_api.module b/swfobject_api.module
+index 2585e6f..5839168 100644
+--- a/swfobject_api.module
++++ b/swfobject_api.module
+@@ -93,12 +93,7 @@ function swfobject_api_settings_form() {
+     '#description' => t('Express install allows player upgrades without having to leave the site. Only versions 6.0.65 and above are supported.'),
+     '#default_value' => variable_get('swfoa_settings_express', FALSE),
+   );
+-  $form['swfoa_settings_path'] = array(
+-    '#type' => 'textfield',
+-    '#title' => t('Path to SWFObject JS.'),
+-    '#description' => t('Path to the SWFObject JS file.'),
+-    '#default_value' => variable_get('swfoa_settings_path', drupal_get_path('module', 'swfobject_api') .'/swfobject.js'),
+-  );
++
+   return system_settings_form($form);
+ }
+ 
+@@ -118,7 +113,7 @@ function swfobject_api_ensure_swfobject($settings = array()) {
+   static $done = FALSE;
+   if (! $done) {
+     // Load the swfobject library and our add-on to activate it.
+-    drupal_add_js(variable_get('swfoa_settings_path', drupal_get_path('module', 'swfobject_api') .'/swfobject.js'), 'module', 'header');
++    drupal_add_js(libraries_get_path('swfobject') . '/swfobject.js', 'module', 'header');
+     // Load the JS which creates loads the params into the page
+     drupal_add_js(drupal_get_path('module', 'swfobject_api') .'/swfobject_api.js', 'module', 'footer');
+     $done = TRUE;
+@@ -161,7 +156,7 @@ function theme_swfobject_api($url, $params = array(), $vars = array(), $id = NUL
+     'version' => variable_get('swfoa_settings_version', '6'),
+     'type' => 'movie',
+     'bgcolor' => '#FFFFFF',
+-    'express_redirect' => variable_get('swfoa_settings_express', TRUE) ? drupal_get_path('module', 'swfobject_api') .'/expressinstall.swf' : 'false',
++    'express_redirect' => variable_get('swfoa_settings_express', TRUE) ? libraries_get_path('swfobject') . '/expressinstall.swf' : 'false',
+     'class' => '',
+   );
+ 
+@@ -204,4 +199,4 @@ function theme_swfobject_api($url, $params = array(), $vars = array(), $id = NUL
+   // Return the placeholder HTML that will normally get
+   // replaced with flash content.
+   return "<div id=\"$div_id\" class=\"{$class}\">{$no_flash}</div>\n";
+-}
+\ No newline at end of file
++}

@@ -1,0 +1,8 @@
+--- swfobject_api.info
++++ swfobject_api.info
+@@ -1,4 +1,5 @@
+ ; $Id$
+ name = SWFObject API
+ description = Implements the SWFObject Library, makes it easy for developers to add flash content
+-core = 6.x+dependencies[] = libraries
++core = 6.x

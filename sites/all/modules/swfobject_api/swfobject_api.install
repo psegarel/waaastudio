@@ -1,0 +1,93 @@
+<?php
+// $Id: swfobject_api.install,v 1.1.2.1.4.2 2010/05/10 11:42:23 arthuregg Exp $
+
+/**
+ * @file
+ * Install file for SWFObject API module.
+ */
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function swfobject_api_uninstall() {
+  variable_del('swfoa_settings_express');
+  variable_del('swfoa_settings_version');
+}
+
+/**
+ * Implementation of hook_requirements().
+ *
+ * TODO: We could probably check the swfobject file's version here too, similar
+ * to how the jQuery_update 5.x module checks version of jQuery.
+ */
+function swfobject_api_requirements($phase) {
+  $requirements = array();
+  $t = get_t();
+
+  if (!file_exists(libraries_get_path('swfobject'))) {
+    $error_message = $t('Please download the swfobject package from !url and place the extracted swfobject folder into the libraries directory. See README.txt for more info.',
+      array('!url' => l('http://code.google.com/p/swfobject/', 'http://code.google.com/p/swfobject/'))
+    );
+
+    // we need to explicitly set the message when installing the module,
+    // because drupal_check_module() in install.inc doesn't print out
+    // warning messages, and we prefer to tell the user what's wrong.
+    if ($phase == 'install') {
+      drupal_set_message($error_message, 'warning');
+    }
+
+    $requirements['swfobject_api'] = array(
+      'title' => $t('SWFObject API'),
+      'description' => $error_message,
+      'severity' => $phase == 'install' ? REQUIREMENT_WARNING : REQUIREMENT_ERROR,
+      'value' => $t('Copy swfobject.js'),
+    );
+  }
+  elseif ($phase == 'runtime') {
+    $requirements['swfobject_api'] = array(
+      'title' => $t('SWFObject API'),
+      'severity' => REQUIREMENT_OK,
+      'value' => $t('Installed correctly'),
+    );
+  }
+
+  return $requirements;
+}
+
+/**
+ * Implements hook_update_N().
+ */
+function swfobject_api_update_6001() {
+  $return = array();
+
+  // If the Libraries API module is not installed and enabled.
+  if (!module_exists('libraries')) {
+    // If the Libraries API is not installed.
+    if (!drupal_get_path('module', 'libraries')) {
+      $return['#abort'] = array(
+        'success' => FALSE,
+        'query' => t('Please install the <a href="!url">Libraries API</a> module as the SWFObject API module now depends on it.',
+          array('!url' => 'http://drupal.org/project/libraries')),
+      );
+    }
+    else {
+      // Enable the Libraries API module.
+      require_once('includes/install.inc');
+      module_rebuild_cache();
+      drupal_install_modules(array('libraries'));
+    }
+  }
+  elseif (!file_exists(libraries_get_path('swfobject'))) {
+    $return['#abort'] = array(
+      'success' => FALSE,
+      'query' => t('Please download the swfobject package from !url and place the extracted swfobject folder into the libraries directory. See README.txt for more info.',
+        array('!url' => l('http://code.google.com/p/swfobject/', 'http://code.google.com/p/swfobject/'))),
+    );
+  }
+  else {
+    // Delete deprecated variable.
+    variable_del('swfoa_settings_path');
+  }
+
+  return $return;
+}
